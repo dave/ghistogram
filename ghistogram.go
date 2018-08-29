@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"fmt"
 	"math"
-	"strconv"
 	"sync"
 )
 
@@ -160,9 +159,18 @@ func (gh *Histogram) EmitGraph(prefix []byte,
 	gh.m.Lock()
 
 	ranges := gh.Ranges
-	rangesN := len(ranges)
+	//rangesN := len(ranges)
 	counts := gh.Counts
 	countsN := len(counts)
+
+	var rangeLabels []string
+	for i := range ranges {
+		if i == len(ranges)-1 {
+			rangeLabels = append(rangeLabels, fmt.Sprintf("%d+", ranges[i]))
+		} else {
+			rangeLabels = append(rangeLabels, fmt.Sprintf("%d - %d", ranges[i], ranges[i+1]))
+		}
+	}
 
 	if out == nil {
 		out = bytes.NewBuffer(make([]byte, 0, 80*countsN))
@@ -175,15 +183,6 @@ func (gh *Histogram) EmitGraph(prefix []byte,
 		}
 	}
 	maxCountF := float64(maxCount)
-	totCountF := float64(gh.TotCount)
-
-	widthRange := len(strconv.Itoa(int(ranges[rangesN-1])))
-	widthWidth := len(strconv.Itoa(int(ranges[rangesN-1] - ranges[rangesN-2])))
-	widthCount := len(strconv.Itoa(int(maxCount)))
-
-	// Each line looks like: "[prefix]START+WIDTH=COUNT PCT% BAR\n"
-	f := fmt.Sprintf("%%%dd+%%%dd=%%%dd%% 7.2f%%%%",
-		widthRange, widthWidth, widthCount)
 
 	var runCount uint64 // Running total while emitting lines.
 
@@ -193,15 +192,13 @@ func (gh *Histogram) EmitGraph(prefix []byte,
 		if prefix != nil {
 			out.Write(prefix)
 		}
-
-		var width uint64
-		if i < countsN-1 {
-			width = uint64(ranges[i+1] - ranges[i])
-		}
-
 		runCount += c
-		fmt.Fprintf(out, f, ranges[i], width, c,
-			100.0*(float64(runCount)/totCountF))
+
+		if i == len(ranges)-1 {
+			fmt.Fprintf(out, "%4d+      ", ranges[i])
+		} else {
+			fmt.Fprintf(out, "%4d - %-4d", ranges[i], ranges[i+1])
+		}
 
 		if c > 0 {
 			out.Write([]byte(" "))
